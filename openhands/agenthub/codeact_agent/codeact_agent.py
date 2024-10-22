@@ -5,6 +5,7 @@ from openhands.agenthub.codeact_agent.action_parser import CodeActResponseParser
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig
+from openhands.core.exceptions import LLMAPIError
 from openhands.core.message import ImageContent, Message, TextContent
 from openhands.events.action import (
     Action,
@@ -204,7 +205,17 @@ class CodeActAgent(Agent):
             ],
         }
 
-        response = self.llm.completion(**params)
+        try:
+            response = self.llm.completion(**params)
+        except Exception as e:
+            # TODO: be more specific
+            # # litellm.exceptions.BadRequestError: litellm.BadRequestError: OpenAIException - Error code: 400 - {'error': {'message': 'Invalid prompt: your prompt was flagged as potentially violating our usage policy. Please try again with a different prompt: https://platform.openai.com/docs/guides/reasoning/advice-on-prompting', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_prompt'}}
+            # if isinstance(e, litellm.exceptions.BadRequestError):
+            #     await self.report_error(
+            #         'The LLM returned an error. Please try again with a different prompt.'
+            #     )
+            raise LLMAPIError(f"LLM API error: {e}")
+
         parsed_action = self.action_parser.parse(response)
 
         # DEBUG: save llm messages to a file

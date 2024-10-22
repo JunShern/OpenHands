@@ -8,6 +8,7 @@ from openhands.controller.state.state import State, TrafficControlState
 from openhands.controller.stuck import StuckDetector
 from openhands.core.config import AgentConfig, LLMConfig
 from openhands.core.exceptions import (
+    LLMAPIError,
     LLMMalformedActionError,
     LLMNoActionError,
     LLMResponseError,
@@ -422,7 +423,7 @@ class AgentController:
             action = self.agent.step(self.state)
             if action is None:
                 raise LLMNoActionError('No action was returned')
-        except (LLMMalformedActionError, LLMNoActionError, LLMResponseError) as e:
+        except (LLMMalformedActionError, LLMNoActionError, LLMResponseError, LLMAPIError) as e:
             # report to the user
             # and send the underlying exception to the LLM for self-correction
             await self.report_error(str(e))
