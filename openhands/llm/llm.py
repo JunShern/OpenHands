@@ -22,6 +22,7 @@ from litellm.exceptions import (
 )
 from litellm.types.utils import CostPerToken, ModelResponse, Usage
 
+from openhands.core.exceptions import LLMAPIError
 from openhands.core.logger import openhands_logger as logger
 from openhands.core.message import Message
 from openhands.core.metrics import Metrics
