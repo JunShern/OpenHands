@@ -145,6 +145,7 @@ class AgentController:
         self.state.last_error = message
         if exception:
             self.state.last_error += f': {exception}'
+        logger.warning(f"Caught error and reporting to the user and LLM: {message}")
         self.event_stream.add_event(ErrorObservation(message), EventSource.AGENT)
 
     async def start_step_loop(self):

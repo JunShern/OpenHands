@@ -15,6 +15,7 @@ from litellm import completion_cost as litellm_completion_cost
 from litellm.exceptions import (
     APIConnectionError,
     APIError,
+    BadRequestError,
     InternalServerError,
     RateLimitError,
     ServiceUnavailableError,
@@ -188,7 +189,14 @@ class LLM(RetryMixin, DebugMixin):
                     }
 
             # we don't support streaming here, thus we get a ModelResponse
-            resp: ModelResponse = completion_unwrapped(*args, **kwargs)
+            try:
+                resp: ModelResponse = completion_unwrapped(*args, **kwargs)
+            except BadRequestError as e:
+                # BadRequestError isn't part of the `LLM_RETRY_EXCEPTIONS`, since it isn't helpful to retry.
+                # Instead, we raise this and it gets reported to the user and the Agent,
+                # and the Agent has a chance to try again with a different prompt
+                logger.warning(f"LLM API BadRequest error: {e}")
+                raise LLMAPIError(f"LLM API BadRequest error: {e}")
 
             # log for evals or other scripts that need the raw completion
             if self.config.log_completions:

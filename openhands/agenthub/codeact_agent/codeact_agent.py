@@ -205,16 +205,7 @@ class CodeActAgent(Agent):
             ],
         }
 
-        try:
-            response = self.llm.completion(**params)
-        except Exception as e:
-            # TODO: be more specific
-            # # litellm.exceptions.BadRequestError: litellm.BadRequestError: OpenAIException - Error code: 400 - {'error': {'message': 'Invalid prompt: your prompt was flagged as potentially violating our usage policy. Please try again with a different prompt: https://platform.openai.com/docs/guides/reasoning/advice-on-prompting', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_prompt'}}
-            # if isinstance(e, litellm.exceptions.BadRequestError):
-            #     await self.report_error(
-            #         'The LLM returned an error. Please try again with a different prompt.'
-            #     )
-            raise LLMAPIError(f"LLM API error: {e}")
+        response = self.llm.completion(**params)
 
         parsed_action = self.action_parser.parse(response)
 
