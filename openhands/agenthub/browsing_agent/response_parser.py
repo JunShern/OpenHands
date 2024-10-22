@@ -50,7 +50,7 @@ class BrowsingActionParserMessage(ActionParser):
         return '```' not in action_str
 
     def parse(self, action_str: str) -> Action:
-        msg = f'send_msg_to_user("""{action_str}""")'
+        msg = "send_msg_to_user({})".format(repr(action_str))
         return BrowseInteractiveAction(
             browser_actions=msg,
             thought=action_str,
