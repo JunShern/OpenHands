@@ -3,6 +3,8 @@ import copy
 import traceback
 from typing import Type
 
+from litellm.exceptions import BadRequestError
+
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State, TrafficControlState
 from openhands.controller.stuck import StuckDetector
@@ -144,6 +146,7 @@ class AgentController:
         self.state.last_error = message
         if exception:
             self.state.last_error += f': {exception}'
+        logger.warning(f"Caught error and reporting to the user and LLM: {message}")
         self.event_stream.add_event(ErrorObservation(message), EventSource.AGENT)
 
     async def start_step_loop(self):
@@ -427,6 +430,18 @@ class AgentController:
             # and send the underlying exception to the LLM for self-correction
             await self.report_error(str(e))
             return
+        except BadRequestError as e:
+            logger.warning(f"Received BadRequestError: {e}")
+
+            if "invalid_prompt" in str(e):
+                # If we get an `invalid_prompt` error code (flagged for potentially violating
+                # OAI usage policy), safely intervene and just report this to the user and agent
+                # as an ErrorObservation, and the Agent can try again with a different prompt.
+                await self.report_error(str(e))
+                return
+            else:
+                # Other error codes are not expected, just raise as-is and the run will fail.
+                raise
 
         if action.runnable:
             if self.state.confirmation_mode and (
