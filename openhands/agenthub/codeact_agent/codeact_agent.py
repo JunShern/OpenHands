@@ -1,5 +1,6 @@
 import os
 from itertools import islice
+from typing import Any
 
 from litellm.exceptions import BadRequestError
 
@@ -202,10 +203,12 @@ class CodeActAgent(Agent):
             f"truncated messages length {len(truncated_messages)} != {len(messages) - n_to_cut + 1}"
         return truncated_messages
 
-    def completion_with_truncation(self, messages: list[Message]) -> str:
+    def completion_with_truncation(self, messages: list[Message]) -> tuple[Any, list[Message]]:
         """
         Make a completion request to the LLM, but if we hit context window limits, recursively drop
         messages from the middle of the list until the LLM accepts it.
+
+        returns (llm_response, truncated_messages)
         """
         messages = self.truncate_messages_from_middle(messages, self.n_to_cut)
         try:
@@ -218,7 +221,7 @@ class CodeActAgent(Agent):
                 ],
             }
 
-            return self.llm.completion(**params)
+            return self.llm.completion(**params), messages
         except BadRequestError as e:
             if "context_length_exceeded" in e.message:
                 self.n_to_cut += 1
@@ -248,7 +251,7 @@ class CodeActAgent(Agent):
         # prepare what we want to send to the LLM
         messages = self._get_messages(state)
 
-        response = self.completion_with_truncation(messages)
+        response, truncated_messages = self.completion_with_truncation(messages)
         parsed_action = self.action_parser.parse(response)
 
         # DEBUG: save llm messages to a file
@@ -263,7 +266,7 @@ class CodeActAgent(Agent):
                 }
             ]
         }
-        messages = params["messages"] + [response_message]
+        messages = truncated_messages + [response_message]
         with open("/home/logs/llm_messages.json", "w") as f:
             import json
             json.dump(messages, f, indent=2)
