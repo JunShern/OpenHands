@@ -189,15 +189,23 @@ class LLM(RetryMixin, DebugMixin):
                         'anthropic-beta': 'prompt-caching-2024-07-31',
                     }
 
-            # we don't support streaming here, thus we get a ModelResponse
             try:
+                # we don't support streaming here, thus we get a ModelResponse
                 resp: ModelResponse = completion_unwrapped(*args, **kwargs)
             except BadRequestError as e:
-                # BadRequestError isn't part of the `LLM_RETRY_EXCEPTIONS`, since it isn't helpful to retry.
+                error_response = getattr(e, 'error', {})
+                error_code = error_response.get('code')
+                
+                # If we get an `invalid_prompt` error ("Invalid prompt: your prompt was flagged
+                # as potentially violating our usage policy"), it isn't helpful to retry.
                 # Instead, we raise this and it gets reported to the user and the Agent,
                 # and the Agent has a chance to try again with a different prompt
-                logger.warning(f"LLM API BadRequest error: {e}")
-                raise LLMAPIError(f"LLM API BadRequest error: {e}")
+                if error_code == 'invalid_prompt':
+                    logger.warning(f"BadRequestError with {error_code}: {error_response.get('message')}")
+                    raise LLMAPIError(f"LLM API error: {e}")
+                else:
+                    logger.error(f"BadRequestError with {error_code}: {error_response.get('message')}")
+                    raise
 
             # log for evals or other scripts that need the raw completion
             if self.config.log_completions:
