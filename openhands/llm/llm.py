@@ -195,16 +195,16 @@ class LLM(RetryMixin, DebugMixin):
             except BadRequestError as e:
                 logger.warning(f"Received BadRequestError: {e}")
                 
-                if e.code == 'invalid_prompt':
-                    # If we get an `invalid_prompt` error ("Invalid prompt: your prompt was flagged
-                    # as potentially violating our usage policy"), it isn't helpful to retry.
+                if "invalid_prompt" in e.message:
+                    # If we get an `invalid_prompt` error code (flagged for potentially violating
+                    # OAI usage policy), it isn't helpful to retry.
                     # Instead, we raise this as an LLMAPIError which AgentController can catch and
                     # return as an observation, and the Agent can try again with a different prompt.
-                    logger.warning(f"BadRequestError with {e.code}: {e.message}")
-                    raise LLMAPIError(f"LLM API error: {e}")
+                    logger.warning(f"BadRequestError: {e.message}")
+                    raise LLMAPIError(f"LLMAPIError: {e.message}")
                 else:
                     # Other error codes are not expected, just raise as-is and the run will fail.
-                    logger.error(f"BadRequestError with {e.code}: {e.message}")
+                    logger.error(f"BadRequestError: {e.message}")
                     raise
 
             # log for evals or other scripts that need the raw completion
