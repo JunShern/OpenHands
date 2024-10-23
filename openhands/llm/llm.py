@@ -15,7 +15,6 @@ from litellm import completion_cost as litellm_completion_cost
 from litellm.exceptions import (
     APIConnectionError,
     APIError,
-    BadRequestError,
     InternalServerError,
     RateLimitError,
     ServiceUnavailableError,
@@ -189,23 +188,8 @@ class LLM(RetryMixin, DebugMixin):
                         'anthropic-beta': 'prompt-caching-2024-07-31',
                     }
 
-            try:
-                # we don't support streaming here, thus we get a ModelResponse
-                resp: ModelResponse = completion_unwrapped(*args, **kwargs)
-            except BadRequestError as e:
-                logger.warning(f"Received BadRequestError: {e}")
-                
-                if "invalid_prompt" in e.message:
-                    # If we get an `invalid_prompt` error code (flagged for potentially violating
-                    # OAI usage policy), it isn't helpful to retry.
-                    # Instead, we raise this as an LLMAPIError which AgentController can catch and
-                    # return as an observation, and the Agent can try again with a different prompt.
-                    logger.warning(f"BadRequestError: {e.message}")
-                    raise LLMAPIError(f"LLMAPIError: {e.message}")
-                else:
-                    # Other error codes are not expected, just raise as-is and the run will fail.
-                    logger.error(f"BadRequestError: {e.message}")
-                    raise
+            # we don't support streaming here, thus we get a ModelResponse
+            resp: ModelResponse = completion_unwrapped(*args, **kwargs)
 
             # log for evals or other scripts that need the raw completion
             if self.config.log_completions:
