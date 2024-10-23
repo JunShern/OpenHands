@@ -69,13 +69,6 @@ class LLMResponseError(Exception):
         super().__init__(message)
 
 
-# This exception gets sent back to the LLM
-# The LLM API request returned an error
-class LLMAPIError(Exception):
-    def __init__(self, message='Failed to get Agent response due to LLM API error'):
-        super().__init__(message)
-
-
 class UserCancelledError(Exception):
     def __init__(self, message='User cancelled the request'):
         super().__init__(message)
