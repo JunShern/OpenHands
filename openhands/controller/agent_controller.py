@@ -432,12 +432,12 @@ class AgentController:
             return
         except BadRequestError as e:
             logger.warning(f"Received BadRequestError: {e}")
-            
-            if "invalid_prompt" in e.message:
+
+            if "invalid_prompt" in str(e):
                 # If we get an `invalid_prompt` error code (flagged for potentially violating
                 # OAI usage policy), safely intervene and just report this to the user and agent
                 # as an ErrorObservation, and the Agent can try again with a different prompt.
-                await self.report_error(str(e.message))
+                await self.report_error(str(e))
                 return
             else:
                 # Other error codes are not expected, just raise as-is and the run will fail.
