@@ -196,14 +196,15 @@ class LLM(RetryMixin, DebugMixin):
                 error_response = getattr(e, 'error', {})
                 error_code = error_response.get('code')
                 
-                # If we get an `invalid_prompt` error ("Invalid prompt: your prompt was flagged
-                # as potentially violating our usage policy"), it isn't helpful to retry.
-                # Instead, we raise this and it gets reported to the user and the Agent,
-                # and the Agent has a chance to try again with a different prompt
                 if error_code == 'invalid_prompt':
+                    # If we get an `invalid_prompt` error ("Invalid prompt: your prompt was flagged
+                    # as potentially violating our usage policy"), it isn't helpful to retry.
+                    # Instead, we raise this as an LLMAPIError which AgentController can catch and
+                    # return as an observation, and the Agent can try again with a different prompt.
                     logger.warning(f"BadRequestError with {error_code}: {error_response.get('message')}")
                     raise LLMAPIError(f"LLM API error: {e}")
                 else:
+                    # Other error codes are not expected, just raise as-is and the run will fail.
                     logger.error(f"BadRequestError with {error_code}: {error_response.get('message')}")
                     raise
 
