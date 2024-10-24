@@ -1,10 +1,14 @@
 import os
 from itertools import islice
+from typing import Any
+
+from litellm.exceptions import BadRequestError
 
 from openhands.agenthub.codeact_agent.action_parser import CodeActResponseParser
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig
+from openhands.core.logger import openhands_logger as logger
 from openhands.core.message import ImageContent, Message, TextContent
 from openhands.events.action import (
     Action,
@@ -93,6 +97,10 @@ class CodeActAgent(Agent):
             micro_agent=self.micro_agent,
         )
 
+        # remember how many messages to drop from the middle of the list since it's safe to assume
+        # that in the next step, we should drop at least as many message
+        self.n_to_cut = 0  # don't drop anything until we start hitting context limits
+
     def action_to_str(self, action: Action) -> str:
         if isinstance(action, CmdRunAction):
             return (
@@ -174,6 +182,55 @@ class CodeActAgent(Agent):
         """Resets the CodeAct Agent."""
         super().reset()
 
+    def truncate_messages_from_middle(self, messages: list[Message], n_to_cut: int) -> list[Message]:
+        """Drop messages from the middle of the list to make it shorter."""
+        if n_to_cut <= 0:
+            return messages
+
+        truncation_message = Message(
+            role='system',
+            content=[
+                TextContent(
+                    text=f"MESSAGE HISTORY HAS BEEN TRUNCATED FROM THE MIDDLE TO REDUCE LENGTH. SKIPPING {n_to_cut} MESSAGES.",
+                    cache_prompt=self.llm.is_caching_prompt_active(),  # Cache system prompt
+                )
+            ],
+        )
+        n_to_keep = len(messages) - n_to_cut
+        left_messages = messages[: (n_to_keep + 1) // 2]
+        right_messages = messages[- (n_to_keep // 2):]
+        truncated_messages = left_messages + [truncation_message] + right_messages
+        assert len(truncated_messages) == len(messages) - n_to_cut + 1, \
+            f"truncated messages length {len(truncated_messages)} != {len(messages) - n_to_cut + 1}"
+        return truncated_messages
+
+    def completion_with_truncation(self, messages: list[Message]) -> tuple[Any, list[Message]]:
+        """
+        Make a completion request to the LLM, but if we hit context window limits, recursively drop
+        messages from the middle of the list until the LLM accepts it.
+
+        returns (llm_response, truncated_messages)
+        """
+        messages = self.truncate_messages_from_middle(messages, self.n_to_cut)
+        try:
+            params = {
+                'messages': self.llm.format_messages_for_llm(messages),
+                'stop': [
+                    '</execute_ipython>',
+                    '</execute_bash>',
+                    '</execute_browse>',
+                ],
+            }
+
+            return self.llm.completion(**params), messages
+        except BadRequestError as e:
+            if "context_length_exceeded" in e.message:
+                self.n_to_cut += 1
+                logger.warning(f"Context length exceeded! Will increase number of messages to drop, with n_to_cut={self.n_to_cut}")
+                return self.completion_with_truncation(messages)
+            else:
+                raise
+
     def step(self, state: State) -> Action:
         """Performs one step using the CodeAct Agent.
         This includes gathering info on previous steps and prompting the model to make a command to execute.
@@ -195,16 +252,10 @@ class CodeActAgent(Agent):
 
         # prepare what we want to send to the LLM
         messages = self._get_messages(state)
-        params = {
-            'messages': self.llm.format_messages_for_llm(messages),
-            'stop': [
-                '</execute_ipython>',
-                '</execute_bash>',
-                '</execute_browse>',
-            ],
-        }
+        all_messages = self.llm.format_messages_for_llm(messages)
 
-        response = self.llm.completion(**params)
+        response, truncated_messages = self.completion_with_truncation(messages)
+        truncated_messages = self.llm.format_messages_for_llm(truncated_messages)
         parsed_action = self.action_parser.parse(response)
 
         # DEBUG: save llm messages to a file
@@ -219,12 +270,17 @@ class CodeActAgent(Agent):
                 }
             ]
         }
-        messages = params["messages"] + [response_message]
-        with open("/home/logs/llm_messages.json", "w") as f:
+        truncated_messages = truncated_messages + [response_message]
+        with open("/home/logs/llm_messages_full.json", "w") as f:
             import json
-            json.dump(messages, f, indent=2)
-        with open("/home/logs/llm_messages.txt", "w") as f:
-            for message in messages:
+            json.dump(all_messages, f, indent=2)
+        with open("/home/logs/llm_messages_full.txt", "w") as f:
+            for message in all_messages:
+                f.write("-" * 100 + message["role"] + "\n")
+                for content in message["content"]:
+                    f.write(content["text"] + "\n")
+        with open("/home/logs/llm_messages_truncated.txt", "w") as f:
+            for message in truncated_messages:
                 f.write("-" * 100 + message["role"] + "\n")
                 for content in message["content"]:
                     f.write(content["text"] + "\n")
