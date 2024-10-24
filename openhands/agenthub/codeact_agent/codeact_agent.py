@@ -8,6 +8,7 @@ from openhands.agenthub.codeact_agent.action_parser import CodeActResponseParser
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig
+from openhands.core.logger import openhands_logger as logger
 from openhands.core.message import ImageContent, Message, TextContent
 from openhands.events.action import (
     Action,
@@ -225,6 +226,7 @@ class CodeActAgent(Agent):
         except BadRequestError as e:
             if "context_length_exceeded" in e.message:
                 self.n_to_cut += 1
+                logger.warning(f"Context length exceeded! Will increase number of messages to drop, with n_to_cut={self.n_to_cut}")
                 return self.completion_with_truncation(messages)
             else:
                 raise
