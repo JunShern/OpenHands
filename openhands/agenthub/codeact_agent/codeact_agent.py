@@ -252,6 +252,7 @@ class CodeActAgent(Agent):
         messages = self._get_messages(state)
 
         response, truncated_messages = self.completion_with_truncation(messages)
+        truncated_messages = self.llm.format_messages_for_llm(truncated_messages)
         parsed_action = self.action_parser.parse(response)
 
         # DEBUG: save llm messages to a file
@@ -266,12 +267,12 @@ class CodeActAgent(Agent):
                 }
             ]
         }
-        messages = truncated_messages + [response_message]
-        with open("/home/logs/llm_messages.json", "w") as f:
+        truncated_messages = truncated_messages + [response_message]
+        with open("/home/logs/llm_messages_full.json", "w") as f:
             import json
-            json.dump(messages, f, indent=2)
-        with open("/home/logs/llm_messages.txt", "w") as f:
-            for message in messages:
+            json.dump(self.llm.format_messages_for_llm(messages), f, indent=2)
+        with open("/home/logs/llm_messages_truncated.txt", "w") as f:
+            for message in truncated_messages:
                 f.write("-" * 100 + message["role"] + "\n")
                 for content in message["content"]:
                     f.write(content["text"] + "\n")
