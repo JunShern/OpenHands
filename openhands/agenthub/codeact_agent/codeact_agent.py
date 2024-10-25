@@ -270,6 +270,7 @@ class CodeActAgent(Agent):
                 }
             ]
         }
+        all_messages = all_messages + [response_message]
         truncated_messages = truncated_messages + [response_message]
         with open("/home/logs/llm_messages_full.json", "w") as f:
             import json
