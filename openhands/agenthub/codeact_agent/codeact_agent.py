@@ -278,13 +278,35 @@ class CodeActAgent(Agent):
         with open("/home/logs/llm_messages_full.txt", "w") as f:
             for message in all_messages:
                 f.write("-" * 100 + message["role"] + "\n")
-                for content in message["content"]:
-                    f.write(content["text"] + "\n")
+                content = message.get("content", "")
+                if isinstance(content, list):
+                    for item in content:
+                        text = item.get("text", "")
+                        f.write(text + "\n")
+                elif isinstance(content, dict):
+                    text = content.get("text", "")
+                    f.write(text + "\n")
+                elif isinstance(content, str):
+                    f.write(content + "\n")
+                else:
+                    # Handle any other unexpected types if necessary
+                    pass
         with open("/home/logs/llm_messages_truncated.txt", "w") as f:
             for message in truncated_messages:
                 f.write("-" * 100 + message["role"] + "\n")
-                for content in message["content"]:
-                    f.write(content["text"] + "\n")
+                content = message.get("content", "")
+                if isinstance(content, list):
+                    for item in content:
+                        text = item.get("text", "")
+                        f.write(text + "\n")
+                elif isinstance(content, dict):
+                    text = content.get("text", "")
+                    f.write(text + "\n")
+                elif isinstance(content, str):
+                    f.write(content + "\n")
+                else:
+                    # Handle any other unexpected types if necessary
+                    pass
 
         return parsed_action
 
